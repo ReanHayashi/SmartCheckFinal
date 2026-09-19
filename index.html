@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartCheck - Station Access Working Prototype</title>
+    <style>
+        :root {
+            --primary: #1e3a8a;
+            --secondary: #3b82f6;
+            --success: #10b981;
+            --danger: #ef4444;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #1e293b;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 650px;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            margin-top: 0;
+            color: var(--primary);
+            text-align: center;
+            font-size: 1.75rem;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #64748b;
+            font-size: 0.95rem;
+            margin-bottom: 25px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 1rem;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--secondary);
+        }
+
+        .preset-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+
+        .btn-preset {
+            padding: 10px;
+            background: #e2e8f0;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: background 0.2s;
+        }
+
+        .btn-preset:hover {
+            background: #cbd5e1;
+        }
+
+        .btn-verify {
+            width: 100%;
+            padding: 14px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.05rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-verify:hover {
+            background: #1e293b;
+        }
+
+        .gate-display {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            font-weight: bold;
+            display: none;
+        }
+
+        .gate-display.granted {
+            background-color: #d1fae5;
+            color: #065f46;
+            border: 2px solid var(--success);
+            display: block;
+        }
+
+        .gate-display.denied {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 2px solid var(--danger);
+            display: block;
+        }
+
+        .status-icon {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .log-section {
+            margin-top: 25px;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 15px;
+        }
+
+        .log-title {
+            font-size: 0.85rem;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+
+        .log-box {
+            background: #0f172a;
+            color: #38bdf8;
+            padding: 12px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            height: 80px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>SmartCheck Terminal</h2>
+    <div class="subtitle">Indian Railways Automated Turnstile Gate Simulation</div>
+
+    <div class="preset-buttons">
+        <button class="btn-preset" onclick="loadPreset('valid')">Load Valid Pass</button>
+        <button class="btn-preset" onclick="loadPreset('duplicate')">Load Used Ticket</button>
+        <button class="btn-preset" onclick="loadPreset('mismatch')">Load ID Mismatch</button>
+    </div>
+
+    <div class="form-group">
+        <label for="pnrInput">Ticket PNR / Token ID</label>
+        <input type="text" id="pnrInput" placeholder="e.g., PNR2026-4040">
+    </div>
+
+    <div class="form-group">
+        <label for="idInput">Scanned Government ID / Biometric Hash</label>
+        <input type="text" id="idInput" placeholder="e.g., ID-2141">
+    </div>
+
+    <button class="btn-verify" onclick="verifyTicket()">Scan & Verify Access</button>
+
+    <div id="gateResult" class="gate-display">
+        <div id="statusIcon" class="status-icon"></div>
+        <div id="statusText" style="font-size: 1.2rem;"></div>
+        <div id="statusReason" style="font-size: 0.9rem; font-weight: normal; margin-top: 5px;"></div>
+    </div>
+
+    <div class="log-section">
+        <div class="log-title">Live System Database Log</div>
+        <div id="logBox" class="log-box">> System initialized. Waiting for passenger scan...</div>
+    </div>
+</div>
+
+<script>
+    // Simulated Database of valid records
+    const database = {
+        "PNR2026-4040": { id: "ID-2141", used: false, name: "Passenger A" },
+        "PNR2026-9942": { id: "PAN-4412X", used: true, name: "Passenger B" } // Already used
+    };
+
+    function logMessage(msg) {
+        const box = document.getElementById('logBox');
+        box.innerHTML += `<br>> ${msg}`;
+        box.scrollTop = box.scrollHeight;
+    }
+
+    function loadPreset(type) {
+        const pnrField = document.getElementById('pnrInput');
+        const idField = document.getElementById('idInput');
+        
+        if (type === 'valid') {
+            pnrField.value = "PNR2026-4040";
+            idField.value = "ID-2141";
+            logMessage("Loaded Preset: Valid Unused Ticket.");
+        } else if (type === 'duplicate') {
+            pnrField.value = "PNR2026-9942";
+            idField.value = "PAN-4412X";
+            logMessage("Loaded Preset: Ticket that was already scanned previously.");
+        } else if (type === 'mismatch') {
+            pnrField.value = "PNR2026-4040";
+            idField.value = "WRONG-ID-0000";
+            logMessage("Loaded Preset: Valid Ticket with mismatched ID presentation.");
+        }
+        
+        // Trigger verification immediately after setting values
+        verifyTicket();
+    }
+
+    function verifyTicket() {
+        const pnr = document.getElementById('pnrInput').value.trim();
+        const scannedId = document.getElementById('idInput').value.trim();
+        const resultDiv = document.getElementById('gateResult');
+        const iconDiv = document.getElementById('statusIcon');
+        const textDiv = document.getElementById('statusText');
+        const reasonDiv = document.getElementById('statusReason');
+
+        if (!pnr || !scannedId) {
+            alert("Please provide both a PNR/Token and an ID.");
+            return;
+        }
+
+        logMessage(`Scanning PNR: ${pnr} against ID: ${scannedId}...`);
+
+        // Check 1: Does PNR exist?
+        if (!database[pnr]) {
+            // Check if it looks like a brand new custom test entry
+            if (pnr.startsWith("PNR")) {
+                database[pnr] = { id: scannedId, used: false, name: "New Passenger" };
+                logMessage(`Database match found (New Registration). Granting access.`);
+                grantAccess("Access Granted: Welcome aboard!");
+                database[pnr].used = true; // Mark as used for next time
+                return;
+            }
+            logMessage(`Error: PNR ${pnr} not found in central reservation database.`);
+            denyAccess("ACCESS DENIED", "Invalid Ticket / Token not recognized.");
+            return;
+        }
+
+        let record = database[pnr];
+
+        // Check 2: Has it been used already?
+        if (record.used) {
+            logMessage(`Fraud Alert: PNR ${pnr} has already been utilized for entry!`);
+            denyAccess("ACCESS DENIED (FRAUD PREVENTED)", "Ticket already scanned at Platform Gate 2.");
+            return;
+        }
+
+        // Check 3: ID Mismatch check
+        if (record.id !== scannedId) {
+            logMessage(`Security Alert: ID mismatch! Expected ${record.id}, got ${scannedId}.`);
+            denyAccess("ACCESS DENIED (ID MISMATCH)", "Passenger ID does not match ticket records.");
+            return;
+        }
+
+        // Success condition
+        record.used = true; // Lock ticket to prevent reuse
+        logMessage(`Success: Cryptographic token verified and ID matched for ${record.name}. Gate opened.`);
+        grantAccess(`ACCESS GRANTED (${record.name})`);
+    }
+
+    function grantAccess(message) {
+        const resultDiv = document.getElementById('gateResult');
+        resultDiv.className = "gate-display granted";
+        document.getElementById('statusIcon').innerHTML = "✔";
+        document.getElementById('statusText').innerHTML = message;
+        document.getElementById('statusReason').innerHTML = "Turnstile opening for 5 seconds...";
+    }
+
+    function denyAccess(title, reason) {
+        const resultDiv = document.getElementById('gateResult');
+        resultDiv.className = "gate-display denied";
+        document.getElementById('statusIcon').innerHTML = "✖";
+        document.getElementById('statusText').innerHTML = title;
+        document.getElementById('statusReason').innerHTML = reason;
+    }
+</script>
+
+</body>
+</html>
